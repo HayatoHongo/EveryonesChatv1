@@ -19,26 +19,3 @@ snapshot_download(
 )
 EOF
 ```
-
-
-
-
-```bash
-docker pull hayatohongo/202050729-traingpt2-hayatohongo-v0:latest
-```
-
-docker run --gpus all -it \
-  -w /workspace \
-  hayatohongo/202050729-traingpt2-hayatohongo-v0:latest \
-  torchrun --standalone --nproc_per_node=1 main.py
-
-
-```bash
-sudo docker run --gpus all -it \
-  hayatohongo/202050729-traingpt2-hayatohongo-v0:latest \
-  torchrun --standalone --nproc_per_node=8 main.py
-```
-
-sudo docker run --gpus all -it \
-  hayatohongo/202050729-traingpt2-hayatohongo-v0:latest \
-  torchrun --standalone --nproc_per_node=1 main.py
