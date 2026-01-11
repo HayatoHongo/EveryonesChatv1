@@ -1,4 +1,7 @@
-# run_train.py
+# main.py
+
+# torchrun --standalone --nproc_per_node=8 main.py
+# torchrun --standalone --nproc_per_node=1 main.py
 import os
 import torch
 import torch.distributed as dist
@@ -30,11 +33,24 @@ def main():
     # モデル/最適化
     model = GPT(config=config)
 
-    # optimizer は model.parameters() でOK（to()前でもin-place移動なので参照は生きる）
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.max_learning_rate, betas=(0.9, 0.95), weight_decay=0.1)
+    ### NEW ###
+    model = model.to(local_rank)
+    model = torch.compile(model)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model,
+        device_ids=[local_rank],
+    )
+    ### NEW ###
+
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=config.max_learning_rate,
+        betas=(0.9, 0.95),
+        weight_decay=0.1,
+    )
 
     # DataLoader（DDP init後なので dist.get_rank() が使える）
-    data_dir = os.environ.get("DATA_DIR", "/path/to/your/npy_dir")
+    data_dir = os.environ.get("DATA_DIR", "/home/ubuntu/virginia-filesystem")
     data_loader = DataLoader(data_dir=data_dir, config=config)
 
     checkpoint_dir = os.environ.get("CKPT_DIR", "./checkpoints")
@@ -49,9 +65,10 @@ def main():
         local_rank=local_rank,
     )
 
-    trainer.train()
-
-    cleanup_ddp()
+    try:
+        trainer.train()
+    finally:
+        cleanup_ddp()
 
 if __name__ == "__main__":
     main()

@@ -1,3 +1,4 @@
+import torch
 from dataclasses import dataclass
 
 @dataclass
@@ -14,11 +15,10 @@ class ModelConfig:
     max_sequence_length: int = 2048
 
     # === model ===
-    embedding_dim: int = 1024
-    hidden_dim: int = 4096
-    num_attention_heads: int = 8
+    embedding_dim: int = 384
+    hidden_dim: int = 1536
+    num_attention_heads: int = 6
     layer_count: int = 20
-    dropout_rate: float = 0.0
     rope_theta: float = 1_000_000.0
     vocab_size: int = 50257
 
@@ -30,4 +30,4 @@ class ModelConfig:
     # === system ===
     device_type: str = "cuda"
     random_seed_value: int = 1337
-    autocast_dtype: str = "bfloat16"
+    autocast_dtype: torch.dtype = torch.bfloat16

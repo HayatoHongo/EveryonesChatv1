@@ -45,33 +45,41 @@ def cleanup_ddp():
 
 
 class Trainer:
-    def __init__(self, model, optimizer, data_loader, config, checkpoint_dir):
+    def __init__(self, model, optimizer, data_loader, config, checkpoint_dir, local_rank):
 
-        
+        """ DELETE
         # DDP 初期化（single-node A100x8: torchrun --standalone --nproc_per_node=8 train.py）
         self.local_rank = setup_ddp()
         self.rank = dist.get_rank() if dist.is_initialized() else 0
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
         self.is_main_process = self.rank == 0
-        
-
-        """ DELETE code
-        # torch.compile は model 定義直後・学習前に1回だけ呼ぶ
-        self.model = torch.compile(model)
         """
-        
+
+        ### NEW ###
+        self.local_rank = local_rank
+        self.rank = dist.get_rank() if dist.is_initialized() else 0
+        self.world_size = dist.get_world_size() if dist.is_initialized() else 1
+        self.is_main_process = self.rank == 0
+        ### NEW ###
+
+        """ DELETE
         # model を rank の GPU に載せてから compile -> DDP
         model = model.to(self.local_rank)
         model = torch.compile(model)
         self.model = DDP(model, device_ids=[self.local_rank])
-        
-        
+        """
+
+        ### NEW ###
+        # main.py 側で DDP 済み
+        self.model = model
+        ### NEW ###
+
         self.optimizer = optimizer
         self.data_loader = data_loader
         self.config = config
         self.start_step = 0
         self.checkpoint_dir = checkpoint_dir
-        
+
         self.steps = []
         self.learning_rates = []
         self.train_losses = []
@@ -79,6 +87,7 @@ class Trainer:
         self.tokens_per_second_list = []
         self.total_seen_tokens_list = []
         self.total_train_time_list = []
+
 
     def save_checkpoint(self, current_step):
         
