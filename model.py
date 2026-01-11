@@ -1,3 +1,5 @@
+# added top-p and top-k filtering in generate function
+# set vocab_size in config.py
 # MHA with KV cache + RoPE + PyTorch SDPA.
 # This traditional implementation is easier to understand, and still efficient in practice.
 # GQA and MLA is a great way for long-text inference with reduced KV cache size,
@@ -321,37 +323,73 @@ class GPT(nn.Module):
         return logits, loss
 
 
-    def generate(self, input_indices, max_new_tokens, temperature=1.0, use_cache=True, reset_cache=False):
+    def generate(self,
+        input_indices,
+        max_new_tokens,
+        temperature=1.0,
+        use_cache=True,
+        reset_cache=False,
+        top_k=None,      # ### NEW ###
+        top_p=None,      # ### NEW ###
+    ):
         self.eval()
 
         if reset_cache:
             for block in self.blocks:
                 block.multihead_attention.reset_cache()
 
-        batch_size = input_indices.size(0)
-        assert batch_size == 1, "generate() only supports batch_size=1"
-        assert temperature > 0.0, "temperature must be positive, not 0 or negative"
-
         next_token = None
 
         for i in range(max_new_tokens):
-            if use_cache is True:
+            if use_cache:
                 if i == 0:
-                    # prefill
-                    logits, _ = self.forward(input_indices, target_indices=None, use_cache=True)
+                    logits, _ = self.forward(input_indices, None, use_cache=True)
                 else:
-                    # cached decoding (T == 1)
-                    logits, _ = self.forward(next_token, target_indices=None, use_cache=True)
-            else: # use_cache is False
-                logits, _ = self.forward(input_indices, target_indices=None, use_cache=False)
+                    logits, _ = self.forward(next_token, None, use_cache=True)
+            else:
+                logits, _ = self.forward(input_indices, None, use_cache=False)
 
-            # sampling
+            """ DELETE
             last_logits = logits[:, -1, :] / temperature
             probs = F.softmax(last_logits, dim=-1)
-            next_token = torch.multinomial(probs, num_samples=1)  # (1, 1)
-            next_token_id = int(next_token.item())
-            yield next_token_id
+            next_token = torch.multinomial(probs, num_samples=1)
+            """
 
-            # 文脈更新（use_cache=False のときも破綻しない）
+            ### NEW ###
+            last_logits = logits[:, -1, :] / temperature
+
+            if top_k is not None:
+                top_k = min(top_k, last_logits.size(-1))
+                values, _ = torch.topk(last_logits, top_k)
+                min_value = values[:, -1].unsqueeze(-1)
+                last_logits = torch.where(
+                    last_logits < min_value,
+                    torch.full_like(last_logits, float("-inf")),
+                    last_logits,
+                )
+
+            if top_p is not None:
+                sorted_logits, sorted_indices = torch.sort(last_logits, descending=True)
+                sorted_probs = F.softmax(sorted_logits, dim=-1)
+                cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+
+                sorted_mask = cumulative_probs > top_p
+                sorted_mask[..., 1:] = sorted_mask[..., :-1].clone()
+                sorted_mask[..., 0] = False
+
+                sorted_logits = torch.where(
+                    sorted_mask,
+                    torch.full_like(sorted_logits, float("-inf")),
+                    sorted_logits,
+                )
+
+                last_logits = torch.zeros_like(last_logits).scatter(
+                    -1, sorted_indices, sorted_logits
+                )
+
+            probs = F.softmax(last_logits, dim=-1)
+            next_token = torch.multinomial(probs, num_samples=1)
+            ### NEW ###
+
+            yield int(next_token.item())
             input_indices = torch.cat((input_indices, next_token), dim=1)
-

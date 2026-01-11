@@ -6,10 +6,10 @@ class ModelConfig:
     # === training ===
     # DDP automatically sets global batch size = batch_size * number of devices
     batch_size: int = 32 # 16 is equivalent to about 25 GB VRAM usage. 
-    total_training_steps: int = 50_000
-    evaluation_frequency: int = 100
-    checkpoint_save_frequency: int = 10_000
-    evaluation_loops: int = 10
+    total_training_steps: int = 35_000
+    evaluation_frequency: int = 1000
+    checkpoint_save_frequency: int = 5_000
+    evaluation_loops: int = 5
 
     # === sequence ===
     input_sequence_length: int = 1024
